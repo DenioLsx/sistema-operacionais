@@ -109,6 +109,7 @@ let currentLessonId = null;
 let currentQuestionIndex = 0;
 let currentSelectedOption = null;
 let currentQuestionsList = [];
+let isAnswerChecked = false; // Flag para controlar o estado da verificação
 
 // Elementos da DOM
 const welcomeScreen = document.getElementById('welcome-screen');
@@ -153,7 +154,7 @@ function initApp() {
         }
     });
 
-    checkBtn.addEventListener('click', handleCheckAnswer);
+    checkBtn.addEventListener('click', handleMainButtonClick);
 }
 
 function updateStatsDisplay() {
@@ -225,6 +226,7 @@ function startLesson(id) {
 
 function loadQuestion() {
     currentSelectedOption = null;
+    isAnswerChecked = false;
     checkBtn.classList.add('disabled');
     checkBtn.textContent = "Verificar";
     feedbackContent.textContent = "";
@@ -252,7 +254,12 @@ function loadQuestion() {
         const btn = document.createElement('button');
         btn.className = 'option-btn';
         btn.textContent = opt;
-        btn.addEventListener('click', () => selectOption(index, btn));
+        btn.addEventListener('click', () => {
+            // Só permite mudar a seleção se a resposta ainda não foi validada como correta/errada
+            if (!isAnswerChecked) {
+                selectOption(index, btn);
+            }
+        });
         optionsContainer.appendChild(btn);
     });
 }
@@ -264,6 +271,15 @@ function selectOption(index, btnElement) {
     checkBtn.classList.remove('disabled');
 }
 
+// Gerenciador central do botão principal (Verificar / Continuar)
+function handleMainButtonClick() {
+    if (!isAnswerChecked) {
+        handleCheckAnswer();
+    } else {
+        nextStep();
+    }
+}
+
 function handleCheckAnswer() {
     if (currentSelectedOption === null) return;
 
@@ -271,22 +287,39 @@ function handleCheckAnswer() {
     const optionButtons = document.querySelectorAll('.option-btn');
 
     if (currentSelectedOption === q.answer) {
+        // ACERTOU
         optionButtons[currentSelectedOption].classList.add('correct');
         feedbackContent.textContent = "Resposta correta!";
         feedbackContent.className = "feedback-content correct";
+        
+        isAnswerChecked = true;
         checkBtn.textContent = "Continuar";
-        checkBtn.onclick = nextStep;
+        checkBtn.classList.remove('disabled');
     } else {
+        // ERROU
         optionButtons[currentSelectedOption].classList.add('wrong');
-        optionButtons[q.answer].classList.add('correct');
+        optionButtons[q.answer].classList.add('correct'); // Mostra qual era a certa
         
         userState.lives = Math.max(0, userState.lives - 1);
         updateStatsDisplay();
 
-        feedbackContent.textContent = "Ops! Resposta incorreta.";
+        feedbackContent.textContent = "Ops! Resposta incorreta. Tente novamente.";
         feedbackContent.className = "feedback-content wrong";
-        checkBtn.textContent = "Continuar";
-        checkBtn.onclick = nextStep;
+
+        // Trava o botão e deseleciona para forçar o usuário a escolher de novo
+        currentSelectedOption = null;
+        checkBtn.classList.add('disabled');
+        checkBtn.textContent = "Verificar";
+
+        // Desabilita os botões de opção já clicados incorretamente ou permite nova tentativa
+        // Aqui limpamos a seleção para o usuário tentar outra alternativa
+        setTimeout(() => {
+            optionButtons.forEach(b => {
+                if (!b.classList.contains('correct')) {
+                    b.classList.remove('wrong', 'selected');
+                }
+            });
+        }, 800);
 
         if (userState.lives === 0) {
             setTimeout(() => {
@@ -305,7 +338,6 @@ function handleCheckAnswer() {
 function nextStep() {
     currentQuestionIndex++;
     if (currentQuestionIndex < currentQuestionsList.length) {
-        checkBtn.onclick = handleCheckAnswer;
         loadQuestion();
     } else {
         finishLesson();
